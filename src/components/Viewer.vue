@@ -5,6 +5,24 @@ import {onMounted, onUnmounted, ref} from "vue";
 import config from "../config/index.js";
 
 const viewer = ref(null)
+const alpha = ref(1) // alpha混合值 0-1
+const nightAlpha = ref(1) // alpha混合值(夜晚) 0-1
+const dayAlpha = ref(1) // alpha混合值（白天） 0-1
+const brightness = ref(1) // 亮度 +-1
+const hue = ref(0) // 色调 0-360
+const contrast = ref(1) // 对比度 +-1
+const saturation = ref(1) // 饱和度 +-1
+const gamma = ref(1) // 伽马校正
+
+const alpha_6 = ref(1) // alpha混合值 0-1
+const nightAlpha_6 = ref(1) // alpha混合值(夜晚) 0-1
+const dayAlpha_6 = ref(1) // alpha混合值（白天） 0-1
+const brightness_6 = ref(1) // 亮度 +-1
+const hue_6 = ref(0) // 色调 0-360
+const contrast_6 = ref(1) // 对比度 +-1
+const saturation_6 = ref(1) // 饱和度 +-1
+const gamma_6 = ref(1) // 伽马校正
+
 
 function createModel(url = '/models/Cesium_Air.glb', height = 100000) {
   viewer.value.entities.removeAll();
@@ -96,7 +114,17 @@ function addBaseMaps() {
     })
     const imageryLayer = viewer.value.imageryLayers.addImageryProvider(provider, item.index)
     imageryLayer.show = false
+    // imageryLayer.hue = 4; // 图层色调
+    // imageryLayer.contrast = -1.2; // 图层对比度
   }
+}
+
+function addArcgisMapServer() {
+  // arcgis map server
+  const esri = new Cesium.ArcGisMapServerImageryProvider({
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
+  })
+  viewer.value.imageryLayers.addImageryProvider(esri)
 }
 
 const initViewer = () => {
@@ -121,8 +149,8 @@ const initViewer = () => {
   viewer.value.scene.screenSpaceCameraController.zoomEventTypes = [Cesium.CameraEventType.PINCH, Cesium.CameraEventType.WHEEL]
 
   addBaseMaps()
-  viewer.value.imageryLayers.get(1).show = true
-  viewer.value.imageryLayers.get(2).show = true
+  viewer.value.imageryLayers.get(5).show = true
+  viewer.value.imageryLayers.get(6).show = true
 
   // console.log(viewer.value.imageryLayers)
 
@@ -193,8 +221,17 @@ const changeSwitch = (type) => {
       viewer.value.imageryLayers.get(2).show = true
       changeMapScene(viewer.value, false)
       break
+    case 5:
+      hideAllImageryLayers()
+      addArcgisMapServer()
+      changeMapScene(viewer.value, false)
+      break
   }
 
+}
+
+const onValueChange = (val, prop, layerIndex = 5) => {
+  viewer.value.imageryLayers.get(layerIndex)[prop] = val
 }
 
 const destroyViewer = () => {
@@ -219,10 +256,95 @@ onUnmounted(() => {
     <div class="basemap-switch">
       <div class="item" @click="changeSwitch(1)">矢量地图</div>
       <div class="item" @click="changeSwitch(2)">地形地图</div>
-      <div class="item"  @click="changeSwitch(3)">2D影像</div>
-      <div class="item"  @click="changeSwitch(4)">3D影像</div>
-      <div class="item"  @click="add3dTiles">加载3DTiles</div>
-<!--      <div class="item"  @click="createModel">加载模型</div>-->
+      <div class="item" @click="changeSwitch(3)">2D影像</div>
+      <div class="item" @click="changeSwitch(4)">3D影像</div>
+      <div class="item" @click="changeSwitch(5)">Arcgis底图</div>
+      <div class="item" @click="add3dTiles">加载3DTiles</div>
+      <!--      <div class="item"  @click="createModel">加载模型</div>-->
+    </div>
+    <div class="top-div">
+      <div class="item">
+        <span class="label">色调</span>
+        <el-slider v-model="hue" :min="0" :max="360" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'hue') }"/>
+      </div>
+      <div class="item">
+        <span class="label">对比度</span>
+        <el-slider v-model="contrast" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'contrast') }"/>
+      </div>
+      <div class="item">
+        <span class="label">饱和度</span>
+        <el-slider v-model="saturation" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'saturation') }"/>
+      </div>
+      <div class="item">
+        <span class="label">alpha混合值</span>
+        <el-slider v-model="alpha" :min="0" :max="1" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'alpha') }"/>
+      </div>
+      <div class="item">
+        <span class="label">alpha混合值(N)</span>
+        <el-slider v-model="nightAlpha" :min="0" :max="1" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'nightAlpha') }"/>
+      </div>
+      <div class="item">
+        <span class="label">alpha混合值(D)</span>
+        <el-slider v-model="dayAlpha" :min="0" :max="1" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'dayAlpha') }"/>
+      </div>
+      <div class="item">
+        <span class="label">亮度</span>
+        <el-slider v-model="brightness" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'brightness') }"/>
+      </div>
+      <div class="item">
+        <span class="label">伽马校正</span>
+        <el-slider v-model="gamma" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'gamma') }"/>
+      </div>
+    </div>
+    <div class="top-div" style="left: 400px">
+      <div class="item">
+        <span class="label">色调</span>
+        <el-slider v-model="hue_6" :min="0" :max="360" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'hue', 6) }"/>
+      </div>
+      <div class="item">
+        <span class="label">对比度</span>
+        <el-slider v-model="contrast_6" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'contrast', 6) }"/>
+      </div>
+      <div class="item">
+        <span class="label">饱和度</span>
+        <el-slider v-model="saturation_6" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'saturation', 6) }"/>
+      </div>
+      <div class="item">
+        <span class="label">alpha混合值</span>
+        <el-slider v-model="alpha_6" :min="0" :max="1" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'alpha', 6) }"/>
+      </div>
+      <div class="item">
+        <span class="label">alpha混合值(N)</span>
+        <el-slider v-model="nightAlpha_6" :min="0" :max="1" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'nightAlpha', 6) }"/>
+      </div>
+      <div class="item">
+        <span class="label">alpha混合值(D)</span>
+        <el-slider v-model="dayAlpha_6" :min="0" :max="1" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'dayAlpha', 6) }"/>
+      </div>
+      <div class="item">
+        <span class="label">亮度</span>
+        <el-slider v-model="brightness_6" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'brightness', 6) }"/>
+      </div>
+      <div class="item">
+        <span class="label">伽马校正</span>
+        <el-slider v-model="gamma_6" :min="-100" :max="100" :step="0.1" show-input size="small"
+                   @change="(val) => { onValueChange(val, 'gamma', 6) }"/>
+      </div>
     </div>
   </div>
 </template>
@@ -247,6 +369,34 @@ onUnmounted(() => {
       background: #646cff;
       border-radius: 4px;
       text-align: center;
+    }
+  }
+
+  .top-div {
+    position: absolute;
+    top: 10px;
+    left: 20px;
+    z-index: 1;
+    color: white;
+    background: rgba(0, 0, 0, 0.5);
+    font-size: 12px;
+    padding: 8px;
+
+    .item {
+      display: flex;
+      align-items: center;
+      width: 340px;
+      height: 40px;
+      line-height: 40px;
+      margin-left: 10px;
+
+      .label {
+        width: 130px;
+      }
+
+      :deep(.el-slider__input) {
+        width: 100px;
+      }
     }
   }
 }
