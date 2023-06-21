@@ -69,21 +69,21 @@ function add3dTiles() {
     maximumScreenSpaceError: 2,
     maximumNumberOfLoadedTiles: 100000,
   })
-  viewer.value.scene.primitives.add(tileSetModel)
+  // viewer.value.scene.primitives.add(tileSetModel)
   // 控制模型的位置
-  // tileSetModel.readyPromise.then(function (tileSet) {
-  //   viewer.scene.primitives.add(tileSet);
-  //   const heightOffset = 0.0; // 可以改变3Dtiles的高度
-  //   const boundingSphere = tileSet.boundingSphere;
-  //   const cartographic = Cesium.Cartographic.fromCartesian(boundingSphere.center);
-  //   const surface = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, 0.0);
-  //   const offset = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, heightOffset);
-  //   const translation = Cesium.Cartesian3.subtract(offset, surface, new Cesium.Cartesian3());
-  //   tileSet.modelMatrix = Cesium.Matrix4.fromTranslation(translation);
-  //   viewer.zoomTo(tileSet, new Cesium.HeadingPitchRange(0.5, -0.2, tileSet.boundingSphere.radius));
-  // });
+  tileSetModel.readyPromise.then(function (tileSet) {
+    viewer.value.scene.primitives.add(tileSet);
+    const heightOffset = -80.0; // 可以改变3Dtiles的高度
+    const boundingSphere = tileSet.boundingSphere;
+    const cartographic = Cesium.Cartographic.fromCartesian(boundingSphere.center);
+    const surface = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, 0.0);
+    const offset = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, heightOffset);
+    const translation = Cesium.Cartesian3.subtract(offset, surface, new Cesium.Cartesian3());
+    tileSet.modelMatrix = Cesium.Matrix4.fromTranslation(translation);
+    viewer.value.zoomTo(tileSet, new Cesium.HeadingPitchRange(0.5, -0.2, tileSet.boundingSphere.radius));
+  });
   //定位到三维模型
-  viewer.value.zoomTo(tileSetModel)
+  // viewer.value.zoomTo(tileSetModel)
 }
 
 function addBaseMaps() {
