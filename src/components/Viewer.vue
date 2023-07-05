@@ -3,29 +3,40 @@ import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import {onMounted, onUnmounted, ref} from "vue";
 import config from "../config/index.js";
+import {measureLineSpace} from "./utils.js";
+import {useThemeAdjust} from '../hooks/useThemeAdjust.js'
+import PropertiesPanel from './adjust/PropertiesPanel.vue'
 
-const viewer = ref(null)
-const alpha = ref(1) // alpha混合值 0-1
-const nightAlpha = ref(1) // alpha混合值(夜晚) 0-1
-const dayAlpha = ref(1) // alpha混合值（白天） 0-1
-const brightness = ref(1) // 亮度 +-1
-const hue = ref(0) // 色调 0-360
-const contrast = ref(1) // 对比度 +-1
-const saturation = ref(1) // 饱和度 +-1
-const gamma = ref(1) // 伽马校正
+const showAdjust = ref(false)
 
-const alpha_6 = ref(1) // alpha混合值 0-1
-const nightAlpha_6 = ref(1) // alpha混合值(夜晚) 0-1
-const dayAlpha_6 = ref(1) // alpha混合值（白天） 0-1
-const brightness_6 = ref(1) // 亮度 +-1
-const hue_6 = ref(0) // 色调 0-360
-const contrast_6 = ref(1) // 对比度 +-1
-const saturation_6 = ref(1) // 饱和度 +-1
-const gamma_6 = ref(1) // 伽马校正
+let viewer = null
 
+const defaultProps1 = {
+  alpha: 1,
+  nightAlpha: 1,
+  dayAlpha: 1,
+  brightness: 0.6,
+  hue: 1,
+  contrast: 1.8,
+  saturation: 0,
+  gamma: 0.3,
+}
+
+const defaultProps = {
+  alpha: 1,
+  nightAlpha: 1,
+  dayAlpha: 1,
+  brightness: 1,
+  hue: 0,
+  contrast: 1,
+  saturation: 1,
+  gamma: 1,
+}
+
+let themeAdjust
 
 function createModel(url = '/models/Cesium_Air.glb', height = 100000) {
-  viewer.value.entities.removeAll();
+  viewer.entities.removeAll();
 
   const position = Cesium.Cartesian3.fromDegrees(
       109.49087,
@@ -41,7 +52,7 @@ function createModel(url = '/models/Cesium_Air.glb', height = 100000) {
       hpr
   );
 
-  const entity = viewer.value.entities.add({
+  const entity = viewer.entities.add({
     name: url,
     position: position,
     orientation: orientation,
@@ -51,7 +62,7 @@ function createModel(url = '/models/Cesium_Air.glb', height = 100000) {
       maximumScale: 20000,
     },
   });
-  viewer.value.trackedEntity = entity;
+  viewer.trackedEntity = entity;
 }
 
 function getCameraPosition(viewer) {
@@ -84,24 +95,31 @@ function add3dTiles() {
     url: '/保利b3dm/tileset.json',
     // url: '/mars3d-max-shihua-3dtiles/tileset.json',
     // 控制切片视角显示的数量，可调整性能
-    maximumScreenSpaceError: 2,
+    maximumScreenSpaceError: 10,
     maximumNumberOfLoadedTiles: 100000,
   })
-  // viewer.value.scene.primitives.add(tileSetModel)
+  // viewer.scene.primitives.add(tileSetModel)
+  //定位到三维模型
+  // viewer.zoomTo(tileSetModel)
   // 控制模型的位置
   tileSetModel.readyPromise.then(function (tileSet) {
-    viewer.value.scene.primitives.add(tileSet);
-    const heightOffset = -80.0; // 可以改变3Dtiles的高度
+    viewer.scene.primitives.add(tileSet, 0);
+    const heightOffset = -0.0; // 可以改变3Dtiles的高度
     const boundingSphere = tileSet.boundingSphere;
     const cartographic = Cesium.Cartographic.fromCartesian(boundingSphere.center);
     const surface = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, 0.0);
     const offset = Cesium.Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, heightOffset);
     const translation = Cesium.Cartesian3.subtract(offset, surface, new Cesium.Cartesian3());
     tileSet.modelMatrix = Cesium.Matrix4.fromTranslation(translation);
-    viewer.value.zoomTo(tileSet, new Cesium.HeadingPitchRange(0.5, -0.2, tileSet.boundingSphere.radius));
+    viewer.zoomTo(tileSet, new Cesium.HeadingPitchRange(0.5, -0.2, tileSet.boundingSphere.radius));
   });
-  //定位到三维模型
-  // viewer.value.zoomTo(tileSetModel)
+}
+
+function remove3dTiles() {
+  const primitive = viewer.scene.primitives.get(0)
+  if (primitive) {
+    viewer.scene.primitives.remove(primitive)
+  }
 }
 
 function addBaseMaps() {
@@ -112,10 +130,8 @@ function addBaseMaps() {
       subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
       url: item.url,
     })
-    const imageryLayer = viewer.value.imageryLayers.addImageryProvider(provider, item.index)
+    const imageryLayer = viewer.imageryLayers.addImageryProvider(provider, item.index)
     imageryLayer.show = false
-    // imageryLayer.hue = 4; // 图层色调
-    // imageryLayer.contrast = -1.2; // 图层对比度
   }
 }
 
@@ -124,11 +140,11 @@ function addArcgisMapServer() {
   const esri = new Cesium.ArcGisMapServerImageryProvider({
     url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer'
   })
-  viewer.value.imageryLayers.addImageryProvider(esri)
+  viewer.imageryLayers.addImageryProvider(esri)
 }
 
 const initViewer = () => {
-  viewer.value = new Cesium.Viewer('cesiumContainer', {
+  viewer = new Cesium.Viewer('cesiumContainer', {
     shouldAnimate: true,
     animation: false,
     baseLayerPicker: false,
@@ -141,33 +157,50 @@ const initViewer = () => {
     timeline: false,
     navigationHelpButton: false,
     sceneMode: Cesium.SceneMode.SCENE2D,
+    // terrainProvider: Cesium.createWorldTerrain(),
     // scene3DOnly: false,
     // imageryProvider: imgLayer,
   })
 
-  viewer.value.scene.screenSpaceCameraController.tiltEventTypes = [Cesium.CameraEventType.PINCH, Cesium.CameraEventType.RIGHT_DRAG]
-  viewer.value.scene.screenSpaceCameraController.zoomEventTypes = [Cesium.CameraEventType.PINCH, Cesium.CameraEventType.WHEEL]
+  themeAdjust = useThemeAdjust(viewer)
+
+  viewer.scene.screenSpaceCameraController.tiltEventTypes = [Cesium.CameraEventType.PINCH, Cesium.CameraEventType.RIGHT_DRAG]
+  viewer.scene.screenSpaceCameraController.zoomEventTypes = [Cesium.CameraEventType.PINCH, Cesium.CameraEventType.WHEEL]
 
   addBaseMaps()
-  viewer.value.imageryLayers.get(5).show = true
-  viewer.value.imageryLayers.get(6).show = true
+  const imgLayer = viewer.imageryLayers.get(5)
+  const labelLayer = viewer.imageryLayers.get(6)
 
-  // console.log(viewer.value.imageryLayers)
+  // imgLayer.alpha = defaultProps1.alpha
+  // imgLayer.nightAlpha = defaultProps1.nightAlpha
+  // imgLayer.dayAlpha = defaultProps1.dayAlpha
+  // imgLayer.brightness = defaultProps1.brightness
+  // imgLayer.hue = defaultProps1.hue
+  // imgLayer.contrast = defaultProps1.contrast
+  // imgLayer.saturation = defaultProps1.saturation
+  // imgLayer.gamma = defaultProps1.gamma
+  //
+  // themeAdjust.setFilter(labelLayer, true, '#4e70a6')
+
+  imgLayer.show = true
+  labelLayer.show = true
+
+  // console.log(viewer.imageryLayers)
 
   // 改善实体的文字和图片清晰度
-  viewer.value.scene.fxaa = false;
-  // 降低性能提供图片质量
-  viewer.value.scene.globe.maximumScreenSpaceError = 1.9;
-  // 改变地图灰度系数
-  const layer0 = viewer.value.scene.imageryLayers.get(0);
-  layer0.gamma = 0.66;
-  // 调整瓦片数据的结构
-  layer0.minificationFilter = Cesium.TextureMinificationFilter.NEAREST;
-  layer0.magnificationFilter = Cesium.TextureMagnificationFilter.NEAREST;
+  // viewer.scene.fxaa = false;
+  // // 降低性能提供图片质量
+  // viewer.scene.globe.maximumScreenSpaceError = 1.9;
+  // // 改变地图灰度系数
+  // const layer0 = viewer.scene.imageryLayers.get(0);
+  // layer0.gamma = 0.66;
+  // // 调整瓦片数据的结构
+  // layer0.minificationFilter = Cesium.TextureMinificationFilter.NEAREST;
+  // layer0.magnificationFilter = Cesium.TextureMagnificationFilter.NEAREST;
 
-  viewer.value.cesiumWidget.creditContainer.style.display = "none";
+  viewer.cesiumWidget.creditContainer.style.display = "none";
 
-  viewer.value.camera.setView({
+  viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(109.49087, 22.5825, 200000),
     orientation: {
       heading: 0,
@@ -181,13 +214,17 @@ const initViewer = () => {
   console.log('=======viewer init==========')
 }
 
+const drawLine = () => {
+  measureLineSpace(viewer)
+}
+
 function hideAllImageryLayers() {
-  viewer.value.imageryLayers.get(1).show = false
-  viewer.value.imageryLayers.get(2).show = false
-  viewer.value.imageryLayers.get(3).show = false
-  viewer.value.imageryLayers.get(4).show = false
-  viewer.value.imageryLayers.get(5).show = false
-  viewer.value.imageryLayers.get(6).show = false
+  viewer.imageryLayers.get(1).show = false
+  viewer.imageryLayers.get(2).show = false
+  viewer.imageryLayers.get(3).show = false
+  viewer.imageryLayers.get(4).show = false
+  viewer.imageryLayers.get(5).show = false
+  viewer.imageryLayers.get(6).show = false
 }
 
 const changeSwitch = (type) => {
@@ -198,46 +235,60 @@ const changeSwitch = (type) => {
   switch (type) {
     case 1:
       hideAllImageryLayers()
-      viewer.value.imageryLayers.get(5).show = true
-      viewer.value.imageryLayers.get(6).show = true
-      changeMapScene(viewer.value, true)
-      console.log(viewer.value.imageryLayers)
+      viewer.imageryLayers.get(5).show = true
+      viewer.imageryLayers.get(6).show = true
+      changeMapScene(viewer, true)
+      console.log(viewer.imageryLayers)
       break
     case 2:
       hideAllImageryLayers()
-      viewer.value.imageryLayers.get(3).show = true
-      viewer.value.imageryLayers.get(4).show = true
-      changeMapScene(viewer.value, true)
+      viewer.imageryLayers.get(3).show = true
+      viewer.imageryLayers.get(4).show = true
+      changeMapScene(viewer, true)
       break
     case 3:
       hideAllImageryLayers()
-      viewer.value.imageryLayers.get(1).show = true
-      viewer.value.imageryLayers.get(2).show = true
-      changeMapScene(viewer.value, true)
+      viewer.imageryLayers.get(1).show = true
+      viewer.imageryLayers.get(2).show = true
+      changeMapScene(viewer, true)
       break
     case 4:
       hideAllImageryLayers()
-      viewer.value.imageryLayers.get(1).show = true
-      viewer.value.imageryLayers.get(2).show = true
-      changeMapScene(viewer.value, false)
+      viewer.imageryLayers.get(1).show = true
+      viewer.imageryLayers.get(2).show = true
+      changeMapScene(viewer, false)
       break
     case 5:
       hideAllImageryLayers()
       addArcgisMapServer()
-      changeMapScene(viewer.value, false)
+      changeMapScene(viewer, false)
       break
   }
 
 }
 
-const onValueChange = (val, prop, layerIndex = 5) => {
-  viewer.value.imageryLayers.get(layerIndex)[prop] = val
+const onValueChange = (values, layerIndex = 5, invertColor = false, filterColor = '#4e70a6') => {
+  for (const key in values) {
+    viewer.imageryLayers.get(layerIndex)[key] = values[key]
+  }
+  themeAdjust.setFilter(viewer.imageryLayers.get(layerIndex), invertColor, filterColor)
+}
+
+const resetValue = (layerIndex = 5) => {
+  for (const key in defaultProps) {
+    viewer.imageryLayers.get(layerIndex)[key] = defaultProps[key]
+  }
+}
+
+/* 清除实体 */
+const clearAllDrawn = () => {
+  viewer.entities.removeAll()
 }
 
 const destroyViewer = () => {
-  if (viewer.value) {
-    viewer.value.destroy()
-    viewer.value = null
+  if (viewer) {
+    viewer.destroy()
+    viewer = null
     console.log('=====viewer destroy==========')
   }
 }
@@ -260,91 +311,16 @@ onUnmounted(() => {
       <div class="item" @click="changeSwitch(4)">3D影像</div>
       <div class="item" @click="changeSwitch(5)">Arcgis底图</div>
       <div class="item" @click="add3dTiles">加载3DTiles</div>
+      <div class="item" @click="remove3dTiles">移除3DTiles</div>
+      <div class="item" @click="drawLine">测距</div>
+      <div class="item" @click="clearAllDrawn">清除</div>
       <!--      <div class="item"  @click="createModel">加载模型</div>-->
+      <div class="item" @click="showAdjust = !showAdjust">主题调试</div>
     </div>
-    <div class="top-div">
-      <div class="item">
-        <span class="label">色调</span>
-        <el-slider v-model="hue" :min="0" :max="360" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'hue') }"/>
-      </div>
-      <div class="item">
-        <span class="label">对比度</span>
-        <el-slider v-model="contrast" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'contrast') }"/>
-      </div>
-      <div class="item">
-        <span class="label">饱和度</span>
-        <el-slider v-model="saturation" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'saturation') }"/>
-      </div>
-      <div class="item">
-        <span class="label">alpha混合值</span>
-        <el-slider v-model="alpha" :min="0" :max="1" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'alpha') }"/>
-      </div>
-      <div class="item">
-        <span class="label">alpha混合值(N)</span>
-        <el-slider v-model="nightAlpha" :min="0" :max="1" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'nightAlpha') }"/>
-      </div>
-      <div class="item">
-        <span class="label">alpha混合值(D)</span>
-        <el-slider v-model="dayAlpha" :min="0" :max="1" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'dayAlpha') }"/>
-      </div>
-      <div class="item">
-        <span class="label">亮度</span>
-        <el-slider v-model="brightness" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'brightness') }"/>
-      </div>
-      <div class="item">
-        <span class="label">伽马校正</span>
-        <el-slider v-model="gamma" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'gamma') }"/>
-      </div>
-    </div>
-    <div class="top-div" style="left: 400px">
-      <div class="item">
-        <span class="label">色调</span>
-        <el-slider v-model="hue_6" :min="0" :max="360" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'hue', 6) }"/>
-      </div>
-      <div class="item">
-        <span class="label">对比度</span>
-        <el-slider v-model="contrast_6" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'contrast', 6) }"/>
-      </div>
-      <div class="item">
-        <span class="label">饱和度</span>
-        <el-slider v-model="saturation_6" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'saturation', 6) }"/>
-      </div>
-      <div class="item">
-        <span class="label">alpha混合值</span>
-        <el-slider v-model="alpha_6" :min="0" :max="1" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'alpha', 6) }"/>
-      </div>
-      <div class="item">
-        <span class="label">alpha混合值(N)</span>
-        <el-slider v-model="nightAlpha_6" :min="0" :max="1" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'nightAlpha', 6) }"/>
-      </div>
-      <div class="item">
-        <span class="label">alpha混合值(D)</span>
-        <el-slider v-model="dayAlpha_6" :min="0" :max="1" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'dayAlpha', 6) }"/>
-      </div>
-      <div class="item">
-        <span class="label">亮度</span>
-        <el-slider v-model="brightness_6" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'brightness', 6) }"/>
-      </div>
-      <div class="item">
-        <span class="label">伽马校正</span>
-        <el-slider v-model="gamma_6" :min="-100" :max="100" :step="0.1" show-input size="small"
-                   @change="(val) => { onValueChange(val, 'gamma', 6) }"/>
-      </div>
+    <div v-if="showAdjust">
+      <PropertiesPanel :layer-index="5" @onValueChange="onValueChange" @resetValue="resetValue"/>
+      <PropertiesPanel :layer-index="6" :default-props="defaultProps" @onValueChange="onValueChange"
+                       style="left: 440px"/>
     </div>
   </div>
 </template>
@@ -369,34 +345,6 @@ onUnmounted(() => {
       background: #646cff;
       border-radius: 4px;
       text-align: center;
-    }
-  }
-
-  .top-div {
-    position: absolute;
-    top: 10px;
-    left: 20px;
-    z-index: 1;
-    color: white;
-    background: rgba(0, 0, 0, 0.5);
-    font-size: 12px;
-    padding: 8px;
-
-    .item {
-      display: flex;
-      align-items: center;
-      width: 340px;
-      height: 40px;
-      line-height: 40px;
-      margin-left: 10px;
-
-      .label {
-        width: 130px;
-      }
-
-      :deep(.el-slider__input) {
-        width: 100px;
-      }
     }
   }
 }
